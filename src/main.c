@@ -1,12 +1,9 @@
-#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/sysinfo.h>
-#include <time.h>
 
 #include "constants.h"
 
@@ -19,19 +16,18 @@ struct {
 } settings;
 
 void help() {
-    printf("%s\n\n", APP_NAME);
-    printf("retro_server -c corePath -r romPath [-p portNumber] [-h]\n");
-    printf("  -c\t\tSelect the Core .so file.\n");
-    printf("  -r\t\tSelect the Rom file.\n");
-    printf("  -p\t\tSelect the port number. Default: %d\n", DEFAULT_PORT);
-    printf("  -h\t\tShow this message\n");
+    printf("\nretro_server corePath romPath [-p portNumber] [-h]\n");
+    printf("  corePath          Libretro Core .so file. Tip: If the file is in the same directoy you need to use \"./<file>\".\n");
+    printf("  romPath           Rom file.\n");
+    printf("  -p                Select the port number. Default: %d\n", DEFAULT_PORT);
+    printf("  -h                Show this message\n");
     exit(0);
 }
 
 void read_arguments(int argc, char *argv[]) {
     int opt;
     bool error = false;
-    while ((opt = getopt(argc, argv, ":hc:p:r:")) != -1) {
+    while ((opt = getopt(argc, argv, ":hp:")) != -1) {
         switch (opt) {
         case 'h':
             help();
@@ -51,7 +47,6 @@ void read_arguments(int argc, char *argv[]) {
     }
 
     if (optind < argc) {
-        printf("Positional arguments: %d\n", optind);
         for (int index = optind; index < argc; index++) {
             switch (index - optind + 1) {
             case 1:
@@ -65,21 +60,19 @@ void read_arguments(int argc, char *argv[]) {
             default:
                 break;
             }
-            printf("  Argument %d: %s\n", index - optind + 1, argv[index]);
         }
-    } else {
-        fprintf(stderr, "Error: Missing positional arguments.\n");
-        error = true;
-        return;
     }
 
     if (settings.core_path == NULL) {
-        printf("Missing Core Path\n");
+        fprintf(stderr, "Missing Positional Argument: Core Path\n");
         error = true;
-    } else if (settings.rom_path == NULL) {
-        printf("Missing Rom Path\n");
+    }
+    if (settings.rom_path == NULL) {
+        fprintf(stderr, "Missing Positional Argument: Rom Path\n");
         error = true;
-    } else if (settings.port == 0) {
+    }
+
+    if (settings.port == 0) {
         settings.port = DEFAULT_PORT;
     }
 
