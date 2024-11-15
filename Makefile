@@ -8,10 +8,10 @@ DEST_DIR = bin
 TARGET = retro_server
 
 # List all source files (C) in the project
-SOURCES := main.c
+SOURCES := src/main.c
 
 # List all header files (H) in the project
-HEADERS := libretro.h
+HEADERS := src/libretro.h
 
 # Compiler options
 CC = gcc
@@ -24,7 +24,7 @@ all: $(TARGET)
 $(TARGET): $(SOURCES) $(HEADERS)
 	@echo "Building $(TARGET)"
 	@mkdir -p $(DEST_DIR) $(BUILD_DIR)
-	@$(CC) $(CFLAGS) -o $@ $(SOURCES) $(HEADERS)
+	@$(CC) $(CFLAGS) -o $(DEST_DIR)/$@ $(SOURCES) $(HEADERS)
 
 # Clean up the project by removing the compiled executable and object files
 clean:

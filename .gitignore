@@ -4,3 +4,6 @@
 /out/
 /build/
 /dist/
+
+# IDE related
+.vscode/
