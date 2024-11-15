@@ -1,0 +1,6 @@
+# Build artifacts
+/bin/
+/lib/
+/out/
+/build/
+/dist/
