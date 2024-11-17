@@ -8,10 +8,10 @@ DEST_DIR = bin
 TARGET = retro_server
 
 # List all source files (C) in the project
-SOURCES := src/main.c
+SOURCES := src/main.c src/emulation.c src/utils.c
 
 # List all header files (H) in the project
-HEADERS := src/libretro.h
+HEADERS := src/libretro.h src/emulation.h src/utils.h
 
 # Compiler options
 CC = gcc
