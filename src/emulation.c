@@ -2,6 +2,16 @@
 
 struct RetroHandler g_retro;
 
+/**
+ * Logs a message to the frontend.
+ *
+ * @param level The log level of the message.
+ * @param fmt The format string to log.
+ * Same format as \c printf.
+ * Behavior is undefined if this is \c NULL.
+ * @param ... Zero or more arguments used by the format string.
+ * Behavior is undefined if these don't match the ones expected by \c fmt.
+ */
 static void retro_core_log(enum retro_log_level level, const char *format, ...) {
     // TODO: This function should be using log_message from utils.c.
     if (level >= LOG_LEVEL) {
@@ -46,6 +56,14 @@ static void retro_core_log(enum retro_log_level level, const char *format, ...) 
     }
 }
 
+/**
+ * Environment callback to give implementations a way of performing uncommon tasks.
+ *
+ * @param cmd The command to run.
+ * @param data A pointer to the data associated with the command.
+ *
+ * @return Varies by callback, but will always return \c false if the command is not recognized.
+ */
 static bool retro_core_environment(unsigned cmd, void *data) {
     bool *bval;
     bool result = true;
@@ -82,34 +100,48 @@ static bool retro_core_environment(unsigned cmd, void *data) {
     return result;
 }
 
+/**
+ * Render a frame.
+ *
+ * @param data A pointer to the frame buffer data with a pixel format of 15-bit \c 0RGB1555 native endian, unless changed with \c RETRO_ENVIRONMENT_SET_PIXEL_FORMAT.
+ * @param width The width of the frame buffer, in pixels.
+ * @param height The height frame buffer, in pixels.
+ * @param pitch The width of the frame buffer, in bytes.
+ */
 static void retro_core_video_refresh(const void *data, unsigned width, unsigned height, size_t pitch) {
     // if (data) {
     //     dump_image(data, width, height, pitch, videofmt, g_retro.connfd);
     // }
 }
 
+/**
+ * Polls the inputs. It is used for the hardware the update the actual input states.
+ */
 static void retro_core_input_poll(void) {
 }
 
+/**
+ * Queries for input for player 'port'.
+ *
+ * @param port Which player 'port' to query.
+ * @param device Which device type to query for.
+ * @param index The input index to retrieve. (?)
+ * @param id The ID of which value to query, like \c RETRO_DEVICE_ID_JOYPAD_B.
+ * @returns Depends on the provided arguments, but will return 0 if their values are unsupported 
+ * by the frontend or the backing physical device. Also, in general it will return 0 (RELEASED) or 1 (PRESSED).
+ */
 static int16_t retro_core_input_state(unsigned port, unsigned device, unsigned index, unsigned id) {
-    // // printf("PORT: %d | DEV: %d | INDEX: %d | ID: %d | STATE: %d\n", port, device, index, id, joypads[port][id]);
-    // unsigned int result = joypads[port][id];
-    // // joypads[port][id] = 0;
-    // return result;
     return 0;
 }
 
 static void retro_core_audio_sample(int16_t left, int16_t right) {
+    int16_t buf[2] = {left, right};
+	// send_audio(buf, 2);
 }
 
 static size_t retro_core_audio_sample_batch(const int16_t *data, size_t frames) {
-    // unsigned short int cmd = 1;
-    // unsigned buff_size = sizeof(int16_t) * NUM_AUDIO_CHANNELS * frames;
-    // print_log("Sending Audio...");
-    // write(g_retro.connfd, &cmd, sizeof(cmd));
-    // write(g_retro.connfd, &buff_size, sizeof(buff_size));
-    // write(g_retro.connfd, data, buff_size);
-    // print_log("Sent Audio...");
+    unsigned buff_size = sizeof(int16_t) * NUM_AUDIO_CHANNELS * frames;
+    // send_audio(buf, buff_size);
     return frames;
 }
 
@@ -127,7 +159,7 @@ int load_core(const char *sofile) {
     g_retro.handle = dlopen(sofile, RTLD_LAZY);
 
     if (!g_retro.handle){
-        fprintf(stderr, "Error loading library: %s\n", dlerror());
+        log_message(LOG_LEVEL_ERROR, "Error loading library: %s\n", dlerror());
         return EXIT_FAILURE;
     }
 
@@ -186,7 +218,7 @@ int load_game_from_file(const char *filename) {
     void *game_data = NULL;
 
     if (!file) {
-        fprintf(stderr, "Error: Failed to open file '%s': %s\n", filename, strerror(errno));
+        log_message(LOG_LEVEL_ERROR, "Error: Failed to open file '%s': %s\n", filename, strerror(errno));
         return EXIT_FAILURE;
     }
 
@@ -194,7 +226,7 @@ int load_game_from_file(const char *filename) {
     fseek(file, 0, SEEK_END);
     info.size = ftell(file);
     if (info.size == -1L) {
-        fprintf(stderr, "Error: Failed to determine file size for '%s': %s\n", filename, strerror(errno));
+        log_message(LOG_LEVEL_ERROR, "Error: Failed to determine file size for '%s': %s\n", filename, strerror(errno));
         cleanup(file, NULL);
         return EXIT_FAILURE;
     }
@@ -207,13 +239,13 @@ int load_game_from_file(const char *filename) {
     if (!system.need_fullpath) {
         game_data = malloc(info.size);
         if (!game_data) {
-            fprintf(stderr, "Error: Memory allocation failed.\n");
+            log_message(LOG_LEVEL_ERROR, "Memory allocation failed.\n");
             cleanup(file, NULL);
             return EXIT_FAILURE;
         }
 
         if (fread(game_data, info.size, 1, file) != 1) {
-            fprintf(stderr, "Error: Failed to read game data from '%s'.\n", filename);
+            log_message(LOG_LEVEL_ERROR, "Failed to read game data from '%s'.\n", filename);
             cleanup(file, game_data);
             return EXIT_FAILURE;
         }
@@ -228,11 +260,12 @@ int load_game_from_file(const char *filename) {
     }
     
     cleanup(file, game_data);
+
+    struct retro_system_av_info av = {0};
+    g_retro.retro_get_system_av_info(&av);
+    log_message(LOG_LEVEL_DEBUG, "Aspect Ratio: %f", av.geometry.aspect_ratio);
+    log_message(LOG_LEVEL_DEBUG, "Height: %d| Width: %d", av.geometry.base_height, av.geometry.base_width);
     log_message(LOG_LEVEL_DEBUG, "Game loaded");
-    
+
     return EXIT_SUCCESS;
 }
-
-// void load_conn(int* connfd) {
-//     g_retro.connfd = connfd;
-// }
