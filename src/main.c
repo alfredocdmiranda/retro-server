@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -6,14 +7,47 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "communication/server.h"
 #include "constants.h"
 #include "emulation.h"
+
+typedef struct {
+    int index;
+    int** client_socket;
+} thread_args_t;
 
 struct {
     char *core_path;
     char *rom_path;
     uint16_t port;
 } settings;
+struct sockaddr_in server_addr;
+int server_socket;
+int* connections[MAX_CONN] = {NULL};
+
+void *client_handler(void *arg) {
+    thread_args_t *args = (thread_args_t *)arg;
+    int client_socket = **(args->client_socket);
+
+    char buffer[1024];
+    int bytes_read;
+
+    log_message(LOG_LEVEL_INFO, "Player connected to slot %d", args->index);
+
+    // Communicate with the client
+    while ((bytes_read = read(client_socket, buffer, 1024)) > 0) {
+    }
+
+    if (bytes_read == 0) {
+        log_message(LOG_LEVEL_INFO, "Player disconnected from slot %d\n", args->index);
+    } else {
+        log_message(LOG_LEVEL_ERROR, "Read error from slot %d", args->index);
+    }
+
+    *(args->client_socket) = NULL;
+    close(client_socket); // Close the connection
+    pthread_exit(NULL); // Exit the thread
+}
 
 void help() {
     printf("\nretro_server <corePath> <romPath> [-p portNumber] [-h]\n");
@@ -104,10 +138,44 @@ void run_emulation() {
 }
 
 int main(int argc, char *argv[]) {
+    pthread_t emulation_thread_id;
+
     read_arguments(argc, argv);
     load_core(settings.core_path);
     load_game_from_file(settings.rom_path);
-    run_emulation();
+
+    create_server(&server_socket, &server_addr, settings.port);
+    while(true) {
+        int i;
+        for (i=0;i < MAX_CONN;i++) {
+            if (connections[i] == NULL) {
+                break;
+            }
+        }
+        if (i == MAX_CONN) {
+            continue;
+        }
+        
+        connections[i] = malloc(sizeof(int));
+        int conn_status = wait_connection(&server_addr, &server_socket, connections[i]);
+        if (conn_status != 0) {
+            log_message(LOG_LEVEL_ERROR, "It could not stabilish a connection.");
+            continue;
+        }
+
+        pthread_t thread_id;
+        thread_args_t args = {i, &connections[i]};
+        if (pthread_create(&thread_id, NULL, client_handler, &args) != 0) {
+            log_message(LOG_LEVEL_ERROR, "Thread creation failed.");
+            close(*connections[i]);
+            free(connections[i]);
+            connections[i] = NULL;
+            continue;
+        }
+        pthread_detach(thread_id);
+    }
+
+    // run_emulation();
 
     return EXIT_SUCCESS;
 }
