@@ -23,7 +23,10 @@ struct {
 } settings;
 struct sockaddr_in server_addr;
 int server_socket;
+
 int* connections[MAX_CONN] = {NULL};
+int counter_connections = 0;
+pthread_mutex_t conn_counter_mutex;
 
 void *client_handler(void *arg) {
     thread_args_t *args = (thread_args_t *)arg;
@@ -34,6 +37,10 @@ void *client_handler(void *arg) {
 
     log_message(LOG_LEVEL_INFO, "Player connected to slot %d", args->index);
 
+    pthread_mutex_lock(&conn_counter_mutex);
+    counter_connections++;
+    pthread_mutex_unlock(&conn_counter_mutex);
+    
     // Communicate with the client
     while ((bytes_read = read(client_socket, buffer, 1024)) > 0) {
     }
@@ -44,9 +51,56 @@ void *client_handler(void *arg) {
         log_message(LOG_LEVEL_ERROR, "Read error from slot %d", args->index);
     }
 
+    pthread_mutex_lock(&conn_counter_mutex);
+    counter_connections--;
+    pthread_mutex_unlock(&conn_counter_mutex);
+
     *(args->client_socket) = NULL;
     close(client_socket); // Close the connection
     pthread_exit(NULL); // Exit the thread
+}
+
+void *run_emulation(void *arg) {
+    struct timespec start_frame_execution = {0,0};
+    struct timespec start_loop_execution={0,0};
+    struct timespec end_loop_execution={0,0};
+    struct retro_system_av_info av = {0};
+    
+    g_retro.retro_get_system_av_info(&av);
+    double delta_frames = 1/(av.timing.fps); // Time between frames in seconds
+    double delta = delta_frames;
+    double execution_time = 0;
+    int fps_counter = 0;
+
+    log_message(LOG_LEVEL_DEBUG, "Emulation started");
+    while (true) {
+        if (counter_connections == 0) {
+            // Pause the emulation if there is no one connected.
+            delta = delta_frames;
+            log_message(LOG_LEVEL_DEBUG, "No connection");
+            continue;
+        }
+
+        if (execution_time >= 1) {
+            // Show the amount of FPS to check the performance
+            clock_gettime(CLOCK_MONOTONIC, &start_loop_execution);
+            log_message(LOG_LEVEL_DEBUG, "FPS: %d", fps_counter);
+            fps_counter = 0;
+            execution_time = 0;
+        }
+        if (delta >= delta_frames) {
+            // Ensure that executes the correct amount of FPS.
+            clock_gettime(CLOCK_MONOTONIC, &start_frame_execution);
+            g_retro.retro_run();
+            delta = delta-delta_frames;
+            fps_counter++;
+        }
+        clock_gettime(CLOCK_MONOTONIC, &end_loop_execution);
+        delta = ((double)end_loop_execution.tv_sec + 1.0e-9*end_loop_execution.tv_nsec) - 
+                ((double)start_frame_execution.tv_sec + 1.0e-9*start_frame_execution.tv_nsec);
+        execution_time = ((double)end_loop_execution.tv_sec + 1.0e-9*end_loop_execution.tv_nsec) - 
+                ((double)start_loop_execution.tv_sec + 1.0e-9*start_loop_execution.tv_nsec);
+    }
 }
 
 void help() {
@@ -115,28 +169,6 @@ void read_arguments(int argc, char *argv[]) {
     }
 }
 
-void run_emulation() {
-    struct timespec start_frame_execution = {0,0};
-    struct timespec end_loop_execution={0,0};
-    struct retro_system_av_info av = {0};
-    
-    g_retro.retro_get_system_av_info(&av);
-    double delta_frames = 1/(av.timing.fps); // Time between frames in seconds
-    double delta = delta_frames;
-    log_message(LOG_LEVEL_DEBUG, "Emulation started");
-    while (true) {
-        if (delta >= delta_frames) {
-            // Ensure that executes the correct amount of FPS.
-            clock_gettime(CLOCK_MONOTONIC, &start_frame_execution);
-            g_retro.retro_run();
-            delta = delta-delta_frames;
-        }
-        clock_gettime(CLOCK_MONOTONIC, &end_loop_execution);
-        delta = ((double)end_loop_execution.tv_sec + 1.0e-9*end_loop_execution.tv_nsec) - 
-                ((double)start_frame_execution.tv_sec + 1.0e-9*start_frame_execution.tv_nsec);
-    }
-}
-
 int main(int argc, char *argv[]) {
     pthread_t emulation_thread_id;
 
@@ -145,6 +177,17 @@ int main(int argc, char *argv[]) {
     load_game_from_file(settings.rom_path);
 
     create_server(&server_socket, &server_addr, settings.port);
+
+    if (pthread_mutex_init(&conn_counter_mutex, NULL) != 0) {
+        log_message(LOG_LEVEL_ERROR, "Mutex initialization failed");
+        return EXIT_FAILURE;
+    }
+
+    if (pthread_create(&emulation_thread_id, NULL, run_emulation, NULL) != 0) {
+        log_message(LOG_LEVEL_ERROR, "Emulation Thread creation failed.");
+        return EXIT_FAILURE;
+    }
+
     while(true) {
         int i;
         for (i=0;i < MAX_CONN;i++) {
@@ -175,7 +218,7 @@ int main(int argc, char *argv[]) {
         pthread_detach(thread_id);
     }
 
-    // run_emulation();
+    pthread_mutex_destroy(&conn_counter_mutex);
 
     return EXIT_SUCCESS;
 }
