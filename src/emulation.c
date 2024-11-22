@@ -149,9 +149,11 @@ static void retro_core_audio_sample(int16_t left, int16_t right) {
     int16_t buf[2] = {left, right};
 	if (g_retro.counter_connections > 0) {
         for (int i=0;i<MAX_CONN;i++){
+            pthread_mutex_lock(&g_retro.connections_mutex[i]);
             if (g_retro.connections[i] != NULL) {
                 send_data(CMD_SEND_AUDIO, buf, sizeof(int16_t) * NUM_AUDIO_CHANNELS, g_retro.connections[i]);
             }
+            pthread_mutex_unlock(&g_retro.connections_mutex[i]);
         }
     }
 }

@@ -60,13 +60,7 @@ def callback(in_data, frame_count, time_info, status):
         return (new_data, pyaudio.paContinue)
 
 p = pyaudio.PyAudio()
-stream = p.open(
-    format=pyaudio.paInt16,
-    channels=2,
-    rate=int(32040),
-    output=True,
-    # stream_callback=callback
-)
+stream = None
 
 def receive_data(sock):
     cmd = struct.unpack("h", s.recv(2))[0]
@@ -80,36 +74,29 @@ pygame.init()
 canvas = pygame.display.set_mode((500, 500))
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.connect((HOST, PORT))
-    cmd = 1
-    # s.sendall(struct.pack("h", cmd))
-    # s.sendall(struct.pack("h", cmd))
-    # s.sendall(struct.pack("h", cmd))
-    counter = 0
-    # stream.start_stream()
+    cmd = 0
     while(True):
-        # buff_size = struct.unpack("i", s.recv(4))[0]
-        # print(buff_size)
-        # data = s.recv(buff_size)
-        # print(1, len(data))
-        # if len(data) < buff_size:
-        #     data += s.recv(buff_size-len(data))
-        # print(2, len(data))
-        # buffer = struct.unpack("h"*(buff_size//2), data)
-        # print(buffer)
-        # data = b"".join([data[i].to_bytes(2, "little", signed=True) for i in range(frames)])
-        # print("AUDIO", frames, stream.get_output_latency())
         cmd, buff_size, data = receive_data(s)
         counter += 1
-        # print(datetime.datetime.now(), counter, cmd, buff_size, len(data))
+        
         if cmd == 1:
-            stream.write(data)
-            # audio_buffer += data
-            pass
+            if stream is not None:
+                stream.write(data)
         elif cmd == 2:
             b = BytesIO(data)
             recvsurface = pygame.image.load(b)
+            recvsurface = pygame.transform.scale(recvsurface, (500, 500)) 
             canvas.blit(recvsurface, (0,0))
             pygame.display.update()
+        elif cmd == 3:
+            ratio, width, height, fps, audio_sample = struct.unpack("ddddd", data)
+            stream = p.open(
+                format=pyaudio.paInt16,
+                channels=2,
+                rate=int(audio_sample),
+                output=True,
+            )
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -122,10 +109,3 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         #     s.sendall(struct.pack("h", 0))
         #     s.sendall(struct.pack("h", keys[key]))
         #     print("KEY SENT: {} | PRESSED: {}".format(keys[key], pressed_or_not))
-            
-        # for event in pygame.event.get():
-        #     if event.type == pygame.KEYDOWN and event.key in keys:
-        #         s.sendall(struct.pack("h", 1))
-        #         s.sendall(struct.pack("h", 0))
-        #         s.sendall(struct.pack("h", keys[event.key]))
-        #         print("KEY SENT: {}".format(keys[event.key]))

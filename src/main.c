@@ -27,6 +27,7 @@ int server_socket;
 int* connections[MAX_CONN] = {NULL};
 int counter_connections = 0;
 pthread_mutex_t conn_counter_mutex;
+pthread_mutex_t connections_mutex[MAX_CONN];
 
 void *client_handler(void *arg) {
     thread_args_t *args = (thread_args_t *)arg;
@@ -37,6 +38,13 @@ void *client_handler(void *arg) {
 
     log_message(LOG_LEVEL_INFO, "Player connected to slot %d", args->index);
     
+    struct retro_system_av_info av = {0};
+    g_retro.retro_get_system_av_info(&av);
+    double av_info[5] = {av.geometry.aspect_ratio, av.geometry.base_height, av.geometry.base_width, av.timing.fps, av.timing.sample_rate};
+    pthread_mutex_lock(&connections_mutex[args->index]);
+    send_data(CMD_SEND_AV_INFO, av_info, sizeof(double) * 5, &client_socket);
+    pthread_mutex_unlock(&connections_mutex[args->index]);
+
     // Communicate with the client
     while ((bytes_read = read(client_socket, buffer, 1024)) > 0) {
         // Receive commands
@@ -176,6 +184,7 @@ int main(int argc, char *argv[]) {
     // memset(joypads, 0, sizeof(joypads));
     memset(&g_retro, 0, sizeof(g_retro));
     g_retro.connections = connections;
+    g_retro.connections_mutex = connections_mutex;
     g_retro.counter_connections = &counter_connections;
     
     load_core(settings.core_path);
@@ -186,6 +195,13 @@ int main(int argc, char *argv[]) {
     if (pthread_mutex_init(&conn_counter_mutex, NULL) != 0) {
         log_message(LOG_LEVEL_ERROR, "Mutex initialization failed");
         return EXIT_FAILURE;
+    }
+
+    for (int i=0;i < MAX_CONN;i++) {
+        if (pthread_mutex_init(&connections_mutex[i], NULL) != 0) {
+            log_message(LOG_LEVEL_ERROR, "Mutex initialization failed");
+            return EXIT_FAILURE;
+        }
     }
 
     if (pthread_create(&emulation_thread_id, NULL, run_emulation, NULL) != 0) {

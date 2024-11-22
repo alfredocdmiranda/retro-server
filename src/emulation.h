@@ -3,6 +3,7 @@
 
 #include <dlfcn.h>
 #include <errno.h>
+#include <pthread.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -30,6 +31,7 @@ typedef struct {
     void *handle;
     bool initialized;
     int** connections;
+    pthread_mutex_t* connections_mutex;
     int* counter_connections;
     enum retro_pixel_format video_fmt;
 
