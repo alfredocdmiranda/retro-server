@@ -36,10 +36,6 @@ void *client_handler(void *arg) {
     int bytes_read;
 
     log_message(LOG_LEVEL_INFO, "Player connected to slot %d", args->index);
-
-    pthread_mutex_lock(&conn_counter_mutex);
-    counter_connections++;
-    pthread_mutex_unlock(&conn_counter_mutex);
     
     // Communicate with the client
     while ((bytes_read = read(client_socket, buffer, 1024)) > 0) {
@@ -50,6 +46,7 @@ void *client_handler(void *arg) {
         log_message(LOG_LEVEL_INFO, "Player disconnected from slot %d\n", args->index);
     } else {
         log_message(LOG_LEVEL_ERROR, "Read error from slot %d", args->index);
+        perror("read error");
     }
 
     pthread_mutex_lock(&conn_counter_mutex);
@@ -198,14 +195,19 @@ int main(int argc, char *argv[]) {
     }
 
     while(true) {
+        pthread_mutex_lock(&conn_counter_mutex);
+        if (counter_connections == MAX_CONN) {
+            pthread_mutex_unlock(&conn_counter_mutex);
+            continue;
+        }
+        pthread_mutex_unlock(&conn_counter_mutex);
+
         int i;
         for (i=0;i < MAX_CONN;i++) {
+            // Select a free slot
             if (connections[i] == NULL) {
                 break;
             }
-        }
-        if (i == MAX_CONN) {
-            continue;
         }
         
         connections[i] = malloc(sizeof(int));
@@ -215,10 +217,18 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
+        pthread_mutex_lock(&conn_counter_mutex);
+        counter_connections++;
+        pthread_mutex_unlock(&conn_counter_mutex);
+
         pthread_t thread_id;
         thread_args_t args = {i, &connections[i]};
+        log_message(LOG_LEVEL_DEBUG, "Creating thread! %d", args.index);
         if (pthread_create(&thread_id, NULL, client_handler, &args) != 0) {
             log_message(LOG_LEVEL_ERROR, "Thread creation failed.");
+            pthread_mutex_lock(&conn_counter_mutex);
+            counter_connections--;
+            pthread_mutex_unlock(&conn_counter_mutex);
             close(*connections[i]);
             free(connections[i]);
             connections[i] = NULL;
