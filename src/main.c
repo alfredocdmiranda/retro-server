@@ -43,6 +43,7 @@ void *client_handler(void *arg) {
     
     // Communicate with the client
     while ((bytes_read = read(client_socket, buffer, 1024)) > 0) {
+        // Receive commands
     }
 
     if (bytes_read == 0) {
@@ -74,12 +75,14 @@ void *run_emulation(void *arg) {
 
     log_message(LOG_LEVEL_DEBUG, "Emulation started");
     while (true) {
+        pthread_mutex_lock(&conn_counter_mutex);
         if (counter_connections == 0) {
+            pthread_mutex_unlock(&conn_counter_mutex);
             // Pause the emulation if there is no one connected.
             delta = delta_frames;
-            log_message(LOG_LEVEL_DEBUG, "No connection");
             continue;
         }
+        pthread_mutex_unlock(&conn_counter_mutex);
 
         if (execution_time >= 1) {
             // Show the amount of FPS to check the performance
