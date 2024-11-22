@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "libretro.h"
+
 #define LOG_LEVEL_DEBUG 1
 #define LOG_LEVEL_INFO  2
 #define LOG_LEVEL_WARNING 3
@@ -12,9 +14,14 @@
 
 #define LOG_LEVEL LOG_LEVEL_DEBUG
 
+typedef struct {
+	uint8_t r, g, b;
+} pixel_t;
+
 // Function to clean up resources in case of an error
 void cleanup(FILE *file, void *data);
 void get_timestamp(char *timestamp, size_t len);
+void *convert_img_to_rgb(const void *data, unsigned width, unsigned height, size_t pitch, enum retro_pixel_format fmt);
 void log_message(int level, const char *format, ...);
 
 #endif

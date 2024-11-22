@@ -1,6 +1,11 @@
 #include "emulation.h"
 
-struct RetroHandler g_retro;
+#ifndef STB_IMAGE_WRITE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+#endif
+
+RetroHandler g_retro = {0};
 
 /**
  * Logs a message to the frontend.
@@ -71,18 +76,17 @@ static bool retro_core_environment(unsigned cmd, void *data) {
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE:
             struct retro_log_callback *cb = (struct retro_log_callback *)data;
             cb->log = retro_core_log;
-            retro_core_log(RETRO_LOG_DEBUG, "This is a test %d", 10);
             break;
         case RETRO_ENVIRONMENT_GET_CAN_DUPE:
             bval = (bool *)data;
             *bval = true;
             break;
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT:
-            // videofmt = *(enum retro_pixel_format*)data;
+            g_retro.video_fmt = *(enum retro_pixel_format*)data;
 
-            // if (videofmt > RETRO_PIXEL_FORMAT_RGB565){
-            //     return false;
-            // }
+            if (g_retro.video_fmt > RETRO_PIXEL_FORMAT_RGB565){
+                result = false;
+            }
             break;
         case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
             // TODO Need to improve this
@@ -109,9 +113,16 @@ static bool retro_core_environment(unsigned cmd, void *data) {
  * @param pitch The width of the frame buffer, in bytes.
  */
 static void retro_core_video_refresh(const void *data, unsigned width, unsigned height, size_t pitch) {
-    // if (data) {
-    //     dump_image(data, width, height, pitch, videofmt, g_retro.connfd);
-    // }
+    if (data && g_retro.counter_connections > 0) {
+        void *converted_image = convert_img_to_rgb(data, width, height, pitch, g_retro.video_fmt);
+        int image_size;
+        unsigned char *png_img = stbi_write_png_to_mem((const unsigned char *) converted_image, 3 * width, width, height, 3, &image_size);
+        for (int i=0;i<MAX_CONN;i++){
+            if (g_retro.connections[i] != NULL) {
+                send_data(CMD_SEND_VIDEO, png_img, image_size, g_retro.connections[i]);
+            }
+        }
+    }
 }
 
 /**
@@ -153,11 +164,8 @@ int load_core(const char *sofile) {
     void (*set_input_state)(retro_input_state_t) = NULL;
     void (*set_audio_sample)(retro_audio_sample_t) = NULL;
     void (*set_audio_sample_batch)(retro_audio_sample_batch_t) = NULL;
-
-    // memset(joypads, 0, sizeof(joypads));
-    memset(&g_retro, 0, sizeof(g_retro));
+    
     g_retro.handle = dlopen(sofile, RTLD_LAZY);
-
     if (!g_retro.handle){
         log_message(LOG_LEVEL_ERROR, "Error loading library: %s\n", dlerror());
         return EXIT_FAILURE;
@@ -201,7 +209,6 @@ int load_core(const char *sofile) {
 
     g_retro.retro_init();
     g_retro.initialized = true;
-    log_message(LOG_LEVEL_DEBUG, "Core loaded");
 
     return EXIT_SUCCESS;
 }

@@ -173,6 +173,12 @@ int main(int argc, char *argv[]) {
     pthread_t emulation_thread_id;
 
     read_arguments(argc, argv);
+    
+    // memset(joypads, 0, sizeof(joypads));
+    memset(&g_retro, 0, sizeof(g_retro));
+    g_retro.connections = connections;
+    g_retro.counter_connections = &counter_connections;
+    
     load_core(settings.core_path);
     load_game_from_file(settings.rom_path);
 

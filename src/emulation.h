@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "communication/commands.h"
+#include "constants.h"
 #include "libretro.h"
 #include "utils.h"
 
@@ -24,10 +26,12 @@
             exit(1);                                      \
     } while (0)
 
-struct RetroHandler {
+typedef struct {
     void *handle;
     bool initialized;
-    int* connfd;
+    int** connections;
+    int* counter_connections;
+    enum retro_pixel_format video_fmt;
 
     void (*retro_init)(void);
     void (*retro_deinit)(void);
@@ -48,8 +52,8 @@ struct RetroHandler {
     size_t (*retro_get_memory_size)(unsigned id);
     void (*retro_cheat_reset)(void);
     void (*retro_cheat_set)(unsigned index, bool enabled, const char *code);
-};
-extern struct RetroHandler g_retro;
+}  RetroHandler;
+extern RetroHandler g_retro;
 
 int load_core(const char *sofile);
 int load_game_from_file(const char *filename);
