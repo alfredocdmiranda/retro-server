@@ -5,7 +5,8 @@ from io import BytesIO
 import pygame
 import datetime
 
-HOST = "127.0.0.1"  # The server's hostname or IP address
+# HOST = "192.168.50.136"  # The server's hostname or IP address
+HOST = "127.0.0.1"
 PORT = 8080  # The port used by the server
 audio_buffer = b""
 keys = {
@@ -58,14 +59,14 @@ def callback(in_data, frame_count, time_info, status):
         # print(x)
         return (new_data, pyaudio.paContinue)
 
-# p = pyaudio.PyAudio()
-# stream = p.open(
-#     format=pyaudio.paInt16,
-#     channels=2,
-#     rate=int(32040),
-#     output=True,
-#     # stream_callback=callback
-# )
+p = pyaudio.PyAudio()
+stream = p.open(
+    format=pyaudio.paInt16,
+    channels=2,
+    rate=int(32040),
+    output=True,
+    # stream_callback=callback
+)
 
 def receive_data(sock):
     cmd = struct.unpack("h", s.recv(2))[0]
