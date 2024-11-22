@@ -51,10 +51,9 @@ void *client_handler(void *arg) {
 
     pthread_mutex_lock(&conn_counter_mutex);
     counter_connections--;
-    pthread_mutex_unlock(&conn_counter_mutex);
-
     *(args->client_socket) = NULL;
     close(client_socket); // Close the connection
+    pthread_mutex_unlock(&conn_counter_mutex);
     pthread_exit(NULL); // Exit the thread
 }
 
