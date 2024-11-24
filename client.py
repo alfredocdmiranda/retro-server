@@ -44,21 +44,6 @@ keys = {
 # RETRO_DEVICE_ID_JOYPAD_L3      14
 # RETRO_DEVICE_ID_JOYPAD_R3      15
 
-def callback(in_data, frame_count, time_info, status):
-        # print("callback")
-        global audio_buffer
-        # print(in_data, frame_count, time_info, status)
-        # data = wf.readframes(frame_count)
-        # If len(data) is less than requested frame_count, PyAudio automatically
-        # assumes the stream is finished, and the stream stops.
-        new_data = audio_buffer[:frame_count*4]
-        audio_buffer = audio_buffer[frame_count*4:]
-        
-        if len(new_data) < frame_count*4:
-            new_data += b"\00"*(frame_count*4)
-        # print(x)
-        return (new_data, pyaudio.paContinue)
-
 p = pyaudio.PyAudio()
 stream = None
 
@@ -77,7 +62,6 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     cmd = 0
     while(True):
         cmd, buff_size, data = receive_data(s)
-        counter += 1
         
         if cmd == 1:
             if stream is not None:
@@ -103,9 +87,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 raise SystemExit
         
         pressed = pygame.key.get_pressed()
-        # for key in keys:
-        #     pressed_or_not = 1 if pressed[key] else 2
-        #     s.sendall(struct.pack("h", pressed_or_not))
-        #     s.sendall(struct.pack("h", 0))
-        #     s.sendall(struct.pack("h", keys[key]))
-        #     print("KEY SENT: {} | PRESSED: {}".format(keys[key], pressed_or_not))
+        if pressed[pygame.K_ESCAPE]:
+            s.sendall(struct.pack("h", 0))
+            s.sendall(struct.pack("i", 0))
+        for key in keys:
+            pressed_or_not = 1 if pressed[key] else 2
+            s.sendall(struct.pack("h", pressed_or_not))
+            s.sendall(struct.pack("i", 2))
+            s.sendall(struct.pack("h", keys[key]))

@@ -30,6 +30,8 @@
 typedef struct {
     void *handle;
     bool initialized;
+    unsigned short joypads[NUM_JOYPADS][NUM_BUTTONS];
+
     int** connections;
     pthread_mutex_t* connections_mutex;
     int* counter_connections;

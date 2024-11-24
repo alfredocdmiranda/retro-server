@@ -32,29 +32,53 @@ pthread_mutex_t connections_mutex[MAX_CONN];
 void *client_handler(void *arg) {
     thread_args_t *args = (thread_args_t *)arg;
     int client_socket = **(args->client_socket);
+    int player = args->index;
 
-    char buffer[1024];
+    unsigned short cmd;
+    int bytes_to_read;
+    void * buffer = NULL;
     int bytes_read;
 
-    log_message(LOG_LEVEL_INFO, "Player connected to slot %d", args->index);
+    log_message(LOG_LEVEL_INFO, "Player connected to slot %d", player);
     
+    // Sends AV info data to client
     struct retro_system_av_info av = {0};
     g_retro.retro_get_system_av_info(&av);
-    double av_info[5] = {av.geometry.aspect_ratio, av.geometry.base_height, av.geometry.base_width, av.timing.fps, av.timing.sample_rate};
-    pthread_mutex_lock(&connections_mutex[args->index]);
+    double av_info[5] = {
+        av.geometry.aspect_ratio, av.geometry.base_height, av.geometry.base_width, av.timing.fps, av.timing.sample_rate
+    };
+    pthread_mutex_lock(&connections_mutex[player]);
     send_data(CMD_SEND_AV_INFO, av_info, sizeof(double) * 5, &client_socket);
-    pthread_mutex_unlock(&connections_mutex[args->index]);
+    pthread_mutex_unlock(&connections_mutex[player]);
 
     // Communicate with the client
-    while ((bytes_read = read(client_socket, buffer, 1024)) > 0) {
-        // Receive commands
+    while(true) {
+        bytes_read = read(client_socket, &cmd, 2);
+        if (bytes_read <= 0) {
+            break;
+        }
+
+        bytes_read = read(client_socket, &bytes_to_read, 4);
+        if (bytes_read <= 0) {
+            break;
+        }
+
+        if (bytes_to_read > 0) {
+            buffer = malloc(bytes_to_read);
+            bytes_read = read(client_socket, buffer, bytes_to_read);
+            if (bytes_read <= 0) {
+                break;
+            }
+        }
+        read_command(cmd, buffer, bytes_to_read, player);
+        free(buffer);
+        buffer = NULL;
     }
 
     if (bytes_read == 0) {
-        log_message(LOG_LEVEL_INFO, "Player disconnected from slot %d\n", args->index);
+        log_message(LOG_LEVEL_INFO, "Player disconnected from slot %d\n", player);
     } else {
-        log_message(LOG_LEVEL_ERROR, "Read error from slot %d", args->index);
-        perror("read error");
+        log_message(LOG_LEVEL_ERROR, "Read error from slot %d", player);
     }
 
     pthread_mutex_lock(&conn_counter_mutex);

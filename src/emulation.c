@@ -142,7 +142,7 @@ static void retro_core_input_poll(void) {
  * by the frontend or the backing physical device. Also, in general it will return 0 (RELEASED) or 1 (PRESSED).
  */
 static int16_t retro_core_input_state(unsigned port, unsigned device, unsigned index, unsigned id) {
-    return 0;
+    return g_retro.joypads[port][id];
 }
 
 static void retro_core_audio_sample(int16_t left, int16_t right) {
