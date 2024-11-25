@@ -8,7 +8,7 @@ DEST_DIR = bin
 TARGET = retro_server
 
 # List all source files (C) in the project
-SOURCES := src/main.c src/emulation.c src/utils.c src/communication/server.c src/communication/commands.c
+SOURCES := retro-server-emulator/main.c retro-server-emulator/emulation.c retro-server-emulator/utils.c retro-server-emulator/communication/server.c retro-server-emulator/communication/commands.c
 
 # Compiler options
 CC = gcc
@@ -25,7 +25,7 @@ $(TARGET): $(SOURCES) $(HEADERS)
 
 # Clean up the project by removing the compiled executable and object files
 clean:
-	rm -f $(DEST_DIR)/$(TARGET) $(BUILD_DIRFabrica)/*.o
+	rm -f $(DEST_DIR)/$(TARGET) $(BUILD_DIR)/*.o
 
 # Print help information for users
 help:
