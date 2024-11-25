@@ -117,11 +117,13 @@ static void retro_core_video_refresh(const void *data, unsigned width, unsigned 
         void *converted_image = convert_img_to_rgb(data, width, height, pitch, g_retro.video_fmt);
         int image_size;
         unsigned char *png_img = stbi_write_png_to_mem((const unsigned char *) converted_image, 3 * width, width, height, 3, &image_size);
+        free(converted_image);
         for (int i=0;i<MAX_CONN;i++){
             if (g_retro.connections[i] != NULL) {
                 send_data(CMD_SEND_VIDEO, png_img, image_size, g_retro.connections[i]);
             }
         }
+        STBIW_FREE(png_img);
     }
 }
 
