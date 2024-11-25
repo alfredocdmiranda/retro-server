@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vue.js Direct Embedding</title>
+  <!-- Include Vue.js -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    #message-container {
+      margin-bottom: 15px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Create a new Vue instance -->
+  <div id="app">
+    <h1>WebSocket Client</h1>
+    <img :src="imageUrl" alt="Dynamic Image">
+  </div>
+
+  <script>
+    new Vue({
+      el: '#app',
+      data: {
+        message: '',
+        messages: [],
+        conn: null,
+        imageUrl: '',
+        counterFPS: 0,
+        fps: 0,
+        keyMapping: {
+          "ArrowUp": 4,
+          "ArrowDown": 5,
+          "ArrowLeft": 6,
+          "ArrowRight": 7,
+          "x": 0,
+          "s": 1,
+          "z": 8,
+          "a": 9
+        }
+      },
+      methods: {
+        connectWebSocket() {
+          this.conn = new WebSocket('ws://localhost:8000/');
+
+          this.conn.onopen = () => {
+            console.log('Connected to the server');
+          };
+          this.startInterval()
+          this.conn.onmessage = (event) => {
+            // this.messages.push(event.data);
+            const base64ImageData = event.data; 
+
+            // Create an image element and set its source to the Base64 data
+            // const image = document.createElement('img');
+            this.imageUrl = `data:image/png;base64,${base64ImageData}`;
+
+            // Add the image to the page
+            // document.body.appendChild(image);
+            this.counterFPS++;
+          };
+
+          this.conn.onerror = (error) => {
+            console.error('WebSocket error:', error);
+          };
+        },
+        sendMessage() {
+          const data = { message: "Hello from the client!" }; 
+          this.conn.send(JSON.stringify(data)); 
+        },
+        onKeyDown(event) {
+          if (event.key in this.keyMapping) {
+            const data = { command: 1, key: this.keyMapping[event.key] }; 
+            this.conn.send(JSON.stringify(data));
+          } 
+        },
+        onKeyUp(event) {
+
+          if (event.key in this.keyMapping) {
+            const data = { command: 2, key: this.keyMapping[event.key] }; 
+            this.conn.send(JSON.stringify(data));
+          } 
+        },
+        startInterval() {
+          this.intervalId = setInterval(() => {
+            this.fps = this.counterFPS
+            this.counterFPS = 0
+            console.log("Event triggered! Counter:", this.fps);
+          }, 1000);
+        },
+      },
+      mounted() {
+        this.connectWebSocket();
+        window.addEventListener('keydown', this.onKeyDown);
+        window.addEventListener('keyup', this.onKeyUp);
+      }
+    });
+  </script>
+</body>
+</html>
