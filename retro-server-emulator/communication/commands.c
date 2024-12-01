@@ -18,6 +18,12 @@ int read_command(unsigned short int cmd, void * data, int size, int player) {
 		case CMD_RECV_RESET:
 			g_retro.retro_reset();
 			break;
+		case CMD_RECV_PLAY:
+			// TODO Still need to be implemented
+			break;
+		case CMD_RECV_PAUSE:
+			// TODO Still need to be implemented
+			break;
 		default:
 			break;
 	}
