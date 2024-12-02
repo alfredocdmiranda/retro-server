@@ -19,14 +19,15 @@ int read_command(unsigned short int cmd, void * data, int size, int player) {
 			g_retro.retro_reset();
 			break;
 		case CMD_RECV_PLAY:
-			// TODO Still need to be implemented
+			g_retro.change_state_emulation(false);
 			break;
 		case CMD_RECV_PAUSE:
-			// TODO Still need to be implemented
+			g_retro.change_state_emulation(true);
 			break;
 		default:
 			break;
 	}
+	return 0;
 }
 
 int send_data(unsigned short int cmd, void * data, int size, int* conn) {

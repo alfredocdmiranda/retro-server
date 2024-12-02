@@ -164,12 +164,27 @@ static size_t retro_core_audio_sample_batch(const int16_t *data, size_t frames) 
     unsigned buff_size = sizeof(int16_t) * NUM_AUDIO_CHANNELS * frames;
     if (g_retro.counter_connections > 0) {
         for (int i=0;i<MAX_CONN;i++){
+            pthread_mutex_lock(&g_retro.connections_mutex[i]);
             if (g_retro.connections[i] != NULL) {
                 send_data(CMD_SEND_AUDIO, data, buff_size, g_retro.connections[i]);
             }
+            pthread_mutex_unlock(&g_retro.connections_mutex[i]);
         }
     }
     return frames;
+}
+
+void change_state_emulation(bool paused) {
+    g_retro.paused = paused;
+
+    for (int i=0;i<MAX_CONN;i++){
+        pthread_mutex_lock(&g_retro.connections_mutex[i]);
+        if (g_retro.connections[i] != NULL) {
+            // Broadcast state data. Use config?
+            // send_data(CMD_SEND_AUDIO, data, buff_size, g_retro.connections[i]);
+        }
+        pthread_mutex_unlock(&g_retro.connections_mutex[i]);
+    }
 }
 
 int load_core(const char *sofile) {
@@ -223,8 +238,11 @@ int load_core(const char *sofile) {
     set_audio_sample(retro_core_audio_sample);
     set_audio_sample_batch(retro_core_audio_sample_batch);
 
+    g_retro.change_state_emulation = *change_state_emulation;
+
     g_retro.retro_init();
     g_retro.initialized = true;
+    g_retro.paused = false;
 
     return EXIT_SUCCESS;
 }

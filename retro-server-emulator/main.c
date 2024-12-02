@@ -104,7 +104,7 @@ void *run_emulation(void *arg) {
     log_message(LOG_LEVEL_DEBUG, "Emulation started");
     while (true) {
         pthread_mutex_lock(&conn_counter_mutex);
-        if (counter_connections == 0) {
+        if (counter_connections == 0 || g_retro.paused) {
             pthread_mutex_unlock(&conn_counter_mutex);
             // Pause the emulation if there is no one connected.
             delta = delta_frames;

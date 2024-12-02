@@ -30,12 +30,15 @@
 typedef struct {
     void *handle;
     bool initialized;
+    bool paused;
     unsigned short joypads[NUM_JOYPADS][NUM_BUTTONS];
 
     int** connections;
     pthread_mutex_t* connections_mutex;
     int* counter_connections;
     enum retro_pixel_format video_fmt;
+
+    void (*change_state_emulation)(bool paused);
 
     void (*retro_init)(void);
     void (*retro_deinit)(void);
@@ -59,6 +62,7 @@ typedef struct {
 }  RetroHandler;
 extern RetroHandler g_retro;
 
+void change_state_emulation(bool paused);
 int load_core(const char *sofile);
 int load_game_from_file(const char *filename);
 
