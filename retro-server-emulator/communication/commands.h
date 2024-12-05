@@ -18,7 +18,7 @@
 #define CMD_RECV_PLAY 4
 #define CMD_RECV_PAUSE 5
 
-int send_data(unsigned short int cmd, void * data, int size, int* conn);
+bool send_data(unsigned short int cmd, void * data, int size, int* conn);
 int read_command(unsigned short int cmd, void * data, int size, int player);
 
 #endif

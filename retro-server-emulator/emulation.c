@@ -119,9 +119,11 @@ static void retro_core_video_refresh(const void *data, unsigned width, unsigned 
         unsigned char *png_img = stbi_write_png_to_mem((const unsigned char *) converted_image, 3 * width, width, height, 3, &image_size);
         free(converted_image);
         for (int i=0;i<MAX_CONN;i++){
+            pthread_mutex_lock(&g_retro.connections_mutex[i]);
             if (g_retro.connections[i] != NULL) {
                 send_data(CMD_SEND_VIDEO, png_img, image_size, g_retro.connections[i]);
             }
+            pthread_mutex_unlock(&g_retro.connections_mutex[i]);
         }
         STBIW_FREE(png_img);
     }

@@ -22,6 +22,8 @@ struct {
     uint16_t port;
 } settings;
 struct sockaddr_in server_addr;
+struct sockaddr_in cli_addr;
+socklen_t clilen;
 int server_socket;
 
 int* connections[MAX_CONN] = {NULL};
@@ -31,6 +33,7 @@ pthread_mutex_t connections_mutex[MAX_CONN];
 
 void *client_handler(void *arg) {
     thread_args_t *args = (thread_args_t *)arg;
+    int** client_socket_ptr = args->client_socket;
     int client_socket = **(args->client_socket);
     int player = args->index;
 
@@ -83,8 +86,11 @@ void *client_handler(void *arg) {
 
     pthread_mutex_lock(&conn_counter_mutex);
     counter_connections--;
-    *(args->client_socket) = NULL;
+    pthread_mutex_lock(&connections_mutex[player]);
     close(client_socket); // Close the connection
+    free(*(client_socket_ptr));
+    *(client_socket_ptr) = NULL;
+    pthread_mutex_unlock(&connections_mutex[player]);
     pthread_mutex_unlock(&conn_counter_mutex);
     pthread_exit(NULL); // Exit the thread
 }
@@ -202,6 +208,7 @@ void read_arguments(int argc, char *argv[]) {
 
 int main(int argc, char *argv[]) {
     pthread_t emulation_thread_id;
+    clilen = sizeof(cli_addr);
 
     read_arguments(argc, argv);
     
@@ -234,13 +241,26 @@ int main(int argc, char *argv[]) {
     }
 
     while(true) {
+        int *new_connection = malloc(sizeof(int));
+        int conn_status = wait_connection(&cli_addr, &server_socket, new_connection);
+        if (conn_status != 0) {
+            // It messes the whole server when it reaches this point
+            log_message(LOG_LEVEL_ERROR, "It could not stabilish a connection.!!!");
+            free(new_connection);
+            continue;
+        }
+
         pthread_mutex_lock(&conn_counter_mutex);
         if (counter_connections == MAX_CONN) {
             pthread_mutex_unlock(&conn_counter_mutex);
+            close(*new_connection);
             continue;
         }
         pthread_mutex_unlock(&conn_counter_mutex);
 
+        pthread_mutex_lock(&conn_counter_mutex);
+        counter_connections++;
+        pthread_mutex_unlock(&conn_counter_mutex);
         int i;
         for (i=0;i < MAX_CONN;i++) {
             // Select a free slot
@@ -248,17 +268,10 @@ int main(int argc, char *argv[]) {
                 break;
             }
         }
-        
+        pthread_mutex_lock(&connections_mutex[i]);
         connections[i] = malloc(sizeof(int));
-        int conn_status = wait_connection(&server_addr, &server_socket, connections[i]);
-        if (conn_status != 0) {
-            log_message(LOG_LEVEL_ERROR, "It could not stabilish a connection.");
-            continue;
-        }
-
-        pthread_mutex_lock(&conn_counter_mutex);
-        counter_connections++;
-        pthread_mutex_unlock(&conn_counter_mutex);
+        connections[i] = new_connection;
+        pthread_mutex_unlock(&connections_mutex[i]);
 
         pthread_t thread_id;
         thread_args_t args = {i, &connections[i]};

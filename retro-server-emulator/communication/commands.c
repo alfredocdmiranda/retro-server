@@ -30,12 +30,22 @@ int read_command(unsigned short int cmd, void * data, int size, int player) {
 	return 0;
 }
 
-int send_data(unsigned short int cmd, void * data, int size, int* conn) {
+bool send_data(unsigned short int cmd, void * data, int size, int* conn) {
+	int written_bytes = 0;
     if (conn != NULL){
-		write(*conn, &cmd, sizeof(cmd));
+		written_bytes = write(*conn, &cmd, sizeof(cmd));
+		if (written_bytes <= 0) {
+			return false;
+		}
 		write(*conn, &size, sizeof(size));
+		if (written_bytes <= 0) {
+			return false;
+		}
 		write(*conn, data, size);
+		if (written_bytes <= 0) {
+			return false;
+		}
 	}
 
-    return 0;
+    return true;
 }
