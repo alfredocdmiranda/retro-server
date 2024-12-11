@@ -3,9 +3,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <unistd.h>
 
-#include "../emulation.h"
+#include "../emulation/core.h"
 
 #define CMD_SEND_AUDIO 1
 #define CMD_SEND_VIDEO 2

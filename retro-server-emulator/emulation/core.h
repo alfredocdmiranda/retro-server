@@ -1,5 +1,5 @@
-#ifndef EMULATION_H
-#define EMULATION_H
+#ifndef EMULATION_CORE_H
+#define EMULATION_CORE_H
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -10,10 +10,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "communication/commands.h"
-#include "constants.h"
+#include <SDL2/SDL.h>
+#include <EGL/egl.h>
+#include "glad.h"
+
+#include "audio.h"
+#include "joypad.h"
 #include "libretro.h"
-#include "utils.h"
+#include "video.h"
+#include "../communication/commands.h"
+#include "../constants.h"
+#include "../utils.h"
 
 
 #define NUM_JOYPADS 2
@@ -28,18 +35,24 @@
     } while (0)
 
 typedef struct {
-    void *handle;
+    void *so; // Dynamic Library
     bool initialized;
     bool paused;
     unsigned short joypads[NUM_JOYPADS][NUM_BUTTONS];
 
+    // Connections management variables
     int** connections;
     pthread_mutex_t* connections_mutex;
     int* counter_connections;
-    enum retro_pixel_format video_fmt;
 
+    // Other structures
+    enum retro_pixel_format video_fmt;
+    // struct retro_hw_render_callback hw;
+
+    // Methods
     void (*change_state_emulation)(bool paused);
 
+    // Libretro Methods
     void (*retro_init)(void);
     void (*retro_deinit)(void);
     unsigned (*retro_api_version)(void);
@@ -59,10 +72,9 @@ typedef struct {
     size_t (*retro_get_memory_size)(unsigned id);
     void (*retro_cheat_reset)(void);
     void (*retro_cheat_set)(unsigned index, bool enabled, const char *code);
-}  RetroHandler;
-extern RetroHandler g_retro;
+} RetroHandler;
+extern RetroHandler core_handler;
 
-void change_state_emulation(bool paused);
 int load_core(const char *sofile);
 int load_game_from_file(const char *filename);
 

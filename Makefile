@@ -8,20 +8,29 @@ DEST_DIR = bin
 TARGET = retro_server
 
 # List all source files (C) in the project
-SOURCES := retro-server-emulator/main.c retro-server-emulator/emulation.c retro-server-emulator/utils.c retro-server-emulator/communication/server.c retro-server-emulator/communication/commands.c
+SOURCES := $(wildcard retro-server-emulator/*.c retro-server-emulator/**/*.c)
 
 # Compiler options
 CC = gcc
 CFLAGS = -Wall -O2
+LFLAGS   := -static-libgcc
+LIBS     :=
+packages := sdl2 libpng
+
+ifneq ($(packages),)
+    LIBS    += $(shell pkg-config --libs-only-l $(packages))
+    LFLAGS  += $(shell pkg-config --libs-only-L --libs-only-other $(packages))
+    CFLAGS  += $(shell pkg-config --cflags $(packages))
+endif
 
 # All targets for Makefile
 all: $(TARGET)
 
 # Rule to compile C source files into an executable
 $(TARGET): $(SOURCES) $(HEADERS)
-	@echo "Building $(TARGET)"
+	@echo "Building $(SOURCES)"
 	@mkdir -p $(DEST_DIR) $(BUILD_DIR)
-	@$(CC) $(CFLAGS) -o $(DEST_DIR)/$@ $(SOURCES)
+	@$(CC) $(CFLAGS) $(LFLAGS) -o $(DEST_DIR)/$@ $(SOURCES) $(LIBS)
 
 # Clean up the project by removing the compiled executable and object files
 clean:

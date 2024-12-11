@@ -8,8 +8,8 @@
 #include <unistd.h>
 
 #include "communication/server.h"
+#include "emulation/core.h"
 #include "constants.h"
-#include "emulation.h"
 
 typedef struct {
     int index;
@@ -31,6 +31,10 @@ int counter_connections = 0;
 pthread_mutex_t conn_counter_mutex;
 pthread_mutex_t connections_mutex[MAX_CONN];
 
+void sigint_handler(int sig) {
+    exit(0);
+}
+
 void *client_handler(void *arg) {
     thread_args_t *args = (thread_args_t *)arg;
     int** client_socket_ptr = args->client_socket;
@@ -46,7 +50,7 @@ void *client_handler(void *arg) {
     
     // Sends AV info data to client
     struct retro_system_av_info av = {0};
-    g_retro.retro_get_system_av_info(&av);
+    core_handler.retro_get_system_av_info(&av);
     double av_info[5] = {
         av.geometry.aspect_ratio, av.geometry.base_height, av.geometry.base_width, av.timing.fps, av.timing.sample_rate
     };
@@ -95,13 +99,66 @@ void *client_handler(void *arg) {
     pthread_exit(NULL); // Exit the thread
 }
 
-void *run_emulation(void *arg) {
+void *server_handler(void *arg) {
+    create_server(&server_socket, &server_addr, settings.port);
+
+    while(true) {
+        int *new_connection = malloc(sizeof(int));
+        int conn_status = wait_connection(&cli_addr, &server_socket, new_connection);
+        if (conn_status != 0) {
+            // It messes the whole server when it reaches this point
+            log_message(LOG_LEVEL_ERROR, "It could not stabilish a connection.!!!");
+            free(new_connection);
+            continue;
+        }
+
+        pthread_mutex_lock(&conn_counter_mutex);
+        if (counter_connections == MAX_CONN) {
+            pthread_mutex_unlock(&conn_counter_mutex);
+            close(*new_connection);
+            continue;
+        }
+        pthread_mutex_unlock(&conn_counter_mutex);
+
+        pthread_mutex_lock(&conn_counter_mutex);
+        counter_connections++;
+        pthread_mutex_unlock(&conn_counter_mutex);
+        int i;
+        for (i=0;i < MAX_CONN;i++) {
+            // Select a free slot
+            if (connections[i] == NULL) {
+                break;
+            }
+        }
+        pthread_mutex_lock(&connections_mutex[i]);
+        connections[i] = malloc(sizeof(int));
+        connections[i] = new_connection;
+        pthread_mutex_unlock(&connections_mutex[i]);
+
+        pthread_t thread_id;
+        thread_args_t args = {i, &connections[i]};
+        log_message(LOG_LEVEL_DEBUG, "Creating thread! %d", args.index);
+        if (pthread_create(&thread_id, NULL, client_handler, &args) != 0) {
+            log_message(LOG_LEVEL_ERROR, "Thread creation failed.");
+            pthread_mutex_lock(&conn_counter_mutex);
+            counter_connections--;
+            pthread_mutex_unlock(&conn_counter_mutex);
+            close(*connections[i]);
+            free(connections[i]);
+            connections[i] = NULL;
+            continue;
+        }
+        pthread_detach(thread_id);
+    }
+}
+
+void run_emulation() {
     struct timespec start_frame_execution = {0,0};
     struct timespec start_loop_execution={0,0};
     struct timespec end_loop_execution={0,0};
     struct retro_system_av_info av = {0};
     
-    g_retro.retro_get_system_av_info(&av);
+    core_handler.retro_get_system_av_info(&av);
     double delta_frames = 1/(av.timing.fps); // Time between frames in seconds
     double delta = delta_frames;
     double execution_time = 0;
@@ -110,7 +167,7 @@ void *run_emulation(void *arg) {
     log_message(LOG_LEVEL_DEBUG, "Emulation started");
     while (true) {
         pthread_mutex_lock(&conn_counter_mutex);
-        if (counter_connections == 0 || g_retro.paused) {
+        if (counter_connections == 0 || core_handler.paused) {
             pthread_mutex_unlock(&conn_counter_mutex);
             // Pause the emulation if there is no one connected.
             delta = delta_frames;
@@ -128,7 +185,8 @@ void *run_emulation(void *arg) {
         if (delta >= delta_frames) {
             // Ensure that executes the correct amount of FPS.
             clock_gettime(CLOCK_MONOTONIC, &start_frame_execution);
-            g_retro.retro_run();
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            core_handler.retro_run();
             delta = delta-delta_frames;
             fps_counter++;
         }
@@ -206,6 +264,8 @@ void read_arguments(int argc, char *argv[]) {
     }
 }
 
+static void noop() {}
+
 int main(int argc, char *argv[]) {
     pthread_t emulation_thread_id;
     clilen = sizeof(cli_addr);
@@ -213,15 +273,25 @@ int main(int argc, char *argv[]) {
     read_arguments(argc, argv);
     
     // memset(joypads, 0, sizeof(joypads));
-    memset(&g_retro, 0, sizeof(g_retro));
-    g_retro.connections = connections;
-    g_retro.connections_mutex = connections_mutex;
-    g_retro.counter_connections = &counter_connections;
-    
-    load_core(settings.core_path);
-    load_game_from_file(settings.rom_path);
+    memset(&core_handler, 0, sizeof(core_handler));
+    core_handler.connections = connections;
+    core_handler.connections_mutex = connections_mutex;
+    core_handler.counter_connections = &counter_connections;
 
-    create_server(&server_socket, &server_addr, settings.port);
+    // Use a default version
+    video_info.hw_render.version_major = 4;
+    video_info.hw_render.version_minor = 5;
+    video_info.hw_render.context_type  = RETRO_HW_CONTEXT_OPENGL_CORE;
+    video_info.hw_render.context_reset   = noop;
+    video_info.hw_render.context_destroy = noop;
+
+    if(load_core(settings.core_path) > 0) {
+        exit(EXIT_FAILURE);
+    }
+    
+    if(load_game_from_file(settings.rom_path)) {
+        exit(EXIT_FAILURE);
+    }
 
     if (pthread_mutex_init(&conn_counter_mutex, NULL) != 0) {
         log_message(LOG_LEVEL_ERROR, "Mutex initialization failed");
@@ -235,59 +305,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (pthread_create(&emulation_thread_id, NULL, run_emulation, NULL) != 0) {
-        log_message(LOG_LEVEL_ERROR, "Emulation Thread creation failed.");
+    if (pthread_create(&emulation_thread_id, NULL, server_handler, NULL) != 0) {
+        log_message(LOG_LEVEL_ERROR, "Server Handler Thread creation failed.");
         return EXIT_FAILURE;
     }
 
-    while(true) {
-        int *new_connection = malloc(sizeof(int));
-        int conn_status = wait_connection(&cli_addr, &server_socket, new_connection);
-        if (conn_status != 0) {
-            // It messes the whole server when it reaches this point
-            log_message(LOG_LEVEL_ERROR, "It could not stabilish a connection.!!!");
-            free(new_connection);
-            continue;
-        }
-
-        pthread_mutex_lock(&conn_counter_mutex);
-        if (counter_connections == MAX_CONN) {
-            pthread_mutex_unlock(&conn_counter_mutex);
-            close(*new_connection);
-            continue;
-        }
-        pthread_mutex_unlock(&conn_counter_mutex);
-
-        pthread_mutex_lock(&conn_counter_mutex);
-        counter_connections++;
-        pthread_mutex_unlock(&conn_counter_mutex);
-        int i;
-        for (i=0;i < MAX_CONN;i++) {
-            // Select a free slot
-            if (connections[i] == NULL) {
-                break;
-            }
-        }
-        pthread_mutex_lock(&connections_mutex[i]);
-        connections[i] = malloc(sizeof(int));
-        connections[i] = new_connection;
-        pthread_mutex_unlock(&connections_mutex[i]);
-
-        pthread_t thread_id;
-        thread_args_t args = {i, &connections[i]};
-        log_message(LOG_LEVEL_DEBUG, "Creating thread! %d", args.index);
-        if (pthread_create(&thread_id, NULL, client_handler, &args) != 0) {
-            log_message(LOG_LEVEL_ERROR, "Thread creation failed.");
-            pthread_mutex_lock(&conn_counter_mutex);
-            counter_connections--;
-            pthread_mutex_unlock(&conn_counter_mutex);
-            close(*connections[i]);
-            free(connections[i]);
-            connections[i] = NULL;
-            continue;
-        }
-        pthread_detach(thread_id);
-    }
+    run_emulation();
 
     pthread_mutex_destroy(&conn_counter_mutex);
 

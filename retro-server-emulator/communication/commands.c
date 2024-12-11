@@ -9,20 +9,20 @@ int read_command(unsigned short int cmd, void * data, int size, int player) {
 			break;
 		case CMD_RECV_KEY_PRESSED:
 			key = *((unsigned short *)data);
-			g_retro.joypads[player][key] = 1;
+			core_handler.joypads[player][key] = 1;
 			break;
 		case CMD_RECV_KEY_RELEASED:
 			key = *((unsigned short *)data);
-			g_retro.joypads[player][key] = 0;
+			core_handler.joypads[player][key] = 0;
 			break;
 		case CMD_RECV_RESET:
-			g_retro.retro_reset();
+			core_handler.retro_reset();
 			break;
 		case CMD_RECV_PLAY:
-			g_retro.change_state_emulation(false);
+			core_handler.change_state_emulation(false);
 			break;
 		case CMD_RECV_PAUSE:
-			g_retro.change_state_emulation(true);
+			core_handler.change_state_emulation(true);
 			break;
 		default:
 			break;

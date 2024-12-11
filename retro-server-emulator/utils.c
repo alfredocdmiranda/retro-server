@@ -17,40 +17,6 @@ void get_timestamp(char *timestamp, size_t len) {
     strftime(timestamp, len, "%Y-%m-%d %H:%M:%S", tm_info);
 }
 
-void *convert_img_to_rgb(const void *data, unsigned width, unsigned height, size_t pitch, enum retro_pixel_format fmt) {
-	pixel_t *buffer = (pixel_t*)malloc(width * height * 3);
-	uint8_t *inbytes = (uint8_t*)data;
-	if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
-		for (unsigned row = 0; row < height; row++) {
-			uint32_t *inbuf = (uint32_t*)&inbytes[row * pitch];
-			for (unsigned col = 0; col < width; col++) {
-				buffer[row * width + col].r = inbuf[col] >> 16;
-				buffer[row * width + col].g = inbuf[col] >>  8;
-				buffer[row * width + col].b = inbuf[col];
-			}
-		}
-	} else if (fmt == RETRO_PIXEL_FORMAT_RGB565) {
-		for (unsigned row = 0; row < height; row++) {
-			uint16_t *inbuf = (uint16_t*)&inbytes[row * pitch];
-			for (unsigned col = 0; col < width; col++) {
-				buffer[row * width + col].r = ((inbuf[col] >> 11) & 0x1F) << 3;
-				buffer[row * width + col].g = ((inbuf[col] >>  5) & 0x3F) << 2;
-				buffer[row * width + col].b = ((inbuf[col] & 0x1F) << 3);
-			}
-		}
-	} else {
-		for (unsigned row = 0; row < height; row++) {
-			uint16_t *inbuf = (uint16_t*)&inbytes[row * pitch];
-			for (unsigned col = 0; col < width; col++) {
-				buffer[row * width + col].r = ((inbuf[col] >> 10) & 0x1F) << 3;
-				buffer[row * width + col].g = ((inbuf[col] >>  5) & 0x1F) << 3;
-				buffer[row * width + col].b = ((inbuf[col] & 0x1F) << 3);
-			}
-		}
-	}
-	return buffer;
-}
-
 void log_message(int level, const char *format, ...) {
     if (level >= LOG_LEVEL) {
         const char *level_str;
