@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-#include <png.h>
+#include <lz4.h>
 #include <SDL2/SDL.h>
 #include <EGL/egl.h>
 

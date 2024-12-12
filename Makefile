@@ -15,7 +15,7 @@ CC = gcc
 CFLAGS = -Wall -O2
 LFLAGS   := -static-libgcc
 LIBS     :=
-packages := sdl2 libpng
+packages := sdl2 liblz4
 
 ifneq ($(packages),)
     LIBS    += $(shell pkg-config --libs-only-l $(packages))

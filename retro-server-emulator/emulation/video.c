@@ -28,56 +28,36 @@ static const char *g_fshader_src =
         "gl_FragColor = texture2D(u_tex, o_coord);\n"
     "}";
 
-void write_png_data(png_structp png_ptr, png_bytep data, png_size_t length) {
-    PNGData *p = (PNGData *)png_get_io_ptr(png_ptr);
-    p->data = (unsigned char *)realloc(p->data, p->size + length);
-    if (!p->data) {
-        png_error(png_ptr, "Memory allocation error"); 
-    }
-    memcpy(p->data + p->size, data, length);
-    p->size += length;
-}
+// Function to compress data and include the compressed size in the output
+unsigned char* compress_with_size(const unsigned char *data, size_t data_size, size_t *compressed_size) {
+  // Calculate the maximum compressed size
+  int max_dst_size = LZ4_compressBound(data_size);
 
-PNGData write_rgba_to_png_memory(unsigned char *rgba_data, int width, int height) {
-    PNGData png_data;
-    png_data.data = NULL;
-    png_data.size = 0;
+  // Allocate memory for the compressed data and size header
+  unsigned char *compressed_data = (unsigned char *)malloc(max_dst_size + sizeof(int)); 
+  if (!compressed_data) {
+    fprintf(stderr, "Memory allocation error\n");
+    return NULL;
+  }
 
-    png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!png_ptr) {
-        log_message(LOG_LEVEL_ERROR, "Error creating PNG write struct");
-        return png_data; 
-    }
+  // Compress the data
+  int bytes_compressed = LZ4_compress_default((const char *)data, 
+                                             (char *)(compressed_data + sizeof(int)), // Offset for size header
+                                             data_size, 
+                                             max_dst_size);
+  if (bytes_compressed <= 0) {
+    fprintf(stderr, "Compression error\n");
+    free(compressed_data);
+    return NULL;
+  }
 
-    png_infop info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr) {
-        log_message(LOG_LEVEL_ERROR, "Error creating PNG info struct");
-        png_destroy_write_struct(&png_ptr, (png_infopp)NULL);
-        return png_data; 
-    }
+  // Store the compressed size in the first 4 bytes
+  *((int *)compressed_data) = data_size; 
 
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        log_message(LOG_LEVEL_ERROR, "Error during PNG creation");
-        png_destroy_write_struct(&png_ptr, &info_ptr);
-        free(png_data.data);
-        return png_data; 
-    }
-    png_set_write_fn(png_ptr, &png_data, write_png_data, NULL);
-    png_set_IHDR(
-        png_ptr, info_ptr, width, height, 8, 
-        PNG_COLOR_TYPE_RGBA, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT
-    );
-    png_write_info(png_ptr, info_ptr);
+  // Set the total compressed size (including the size header)
+  *compressed_size = bytes_compressed + sizeof(int);
 
-    // Write image data
-    for (int y = 0; y < height; y++) {
-        png_write_row(png_ptr, &rgba_data[y * width * 4]);
-    }
-
-    png_write_end(png_ptr, NULL);
-    png_destroy_write_struct(&png_ptr, &info_ptr);
-
-    return png_data; 
+  return compressed_data;
 }
 
 static void flip_image_vertically(unsigned char* pixels, int width, int height) {
@@ -98,6 +78,9 @@ static void flip_image_vertically(unsigned char* pixels, int width, int height) 
 }
 
 static void broadcast_frame() {
+    struct timespec start_execution={0,0};
+    struct timespec end_execution={0,0};
+
     if (*(core_handler.counter_connections) > 0) {
         GLint viewport[4];
         glGetIntegerv(GL_VIEWPORT, viewport);
@@ -112,22 +95,21 @@ static void broadcast_frame() {
 
         glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
         flip_image_vertically(pixels, width, height);
-        PNGData png_data = write_rgba_to_png_memory(pixels, width, height);
 
-        if (png_data.data) {
-            for (int i=0;i<MAX_CONN;i++){
-                pthread_mutex_lock(&core_handler.connections_mutex[i]);
-                if (core_handler.connections[i] != NULL) {
-                    send_data(CMD_SEND_VIDEO, png_data.data, png_data.size, core_handler.connections[i]);
-                }
-                pthread_mutex_unlock(&core_handler.connections_mutex[i]);
+        size_t compressed_size;
+        unsigned char* compressed_data = compress_with_size(pixels, width*height*4, &compressed_size);
+        if (!compressed_data) {
+            return EXIT_FAILURE;
+        }
+        for (int i=0;i<MAX_CONN;i++){
+            pthread_mutex_lock(&core_handler.connections_mutex[i]);
+            if (core_handler.connections[i] != NULL) {
+                send_data(CMD_SEND_VIDEO, compressed_data, compressed_size, core_handler.connections[i]);
             }
-
-            free(png_data.data);
-        } else {
-            log_message(LOG_LEVEL_ERROR, "Error creating PNG in memory");
+            pthread_mutex_unlock(&core_handler.connections_mutex[i]);
         }
 
+        free(compressed_data);
         free(pixels);
     }
 }
