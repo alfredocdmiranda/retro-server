@@ -1,6 +1,7 @@
 #include "core.h"
 
 RetroHandler core_handler = {0};
+static struct retro_variable *g_vars = NULL;
 
 void change_state_emulation(bool paused) {
     core_handler.paused = paused;
@@ -80,6 +81,61 @@ static void retro_core_log(enum retro_log_level level, const char *format, ...) 
 static bool retro_core_environment(unsigned cmd, void *data) {
     bool result = true;
     switch (cmd) {
+        case RETRO_ENVIRONMENT_SET_VARIABLES: {
+            const struct retro_variable *vars = (const struct retro_variable *)data;
+            size_t num_vars = 0;
+
+            for (const struct retro_variable *v = vars; v->key; ++v) {
+                num_vars++;
+            }
+
+            g_vars = (struct retro_variable*)calloc(num_vars + 1, sizeof(*g_vars));
+            for (unsigned i = 0; i < num_vars; ++i) {
+                const struct retro_variable *invar = &vars[i];
+                struct retro_variable *outvar = &g_vars[i];
+
+                const char *semicolon = strchr(invar->value, ';');
+                const char *first_pipe = strchr(invar->value, '|');
+
+                SDL_assert(semicolon && *semicolon);
+                semicolon++;
+                while (isspace(*semicolon))
+                    semicolon++;
+
+                if (first_pipe) {
+                    outvar->value = malloc((first_pipe - semicolon) + 1);
+                    memcpy((char*)outvar->value, semicolon, first_pipe - semicolon);
+                    ((char*)outvar->value)[first_pipe - semicolon] = '\0';
+                } else {
+                    outvar->value = strdup(semicolon);
+                }
+
+                outvar->key = strdup(invar->key);
+                SDL_assert(outvar->key && outvar->value);
+            }
+
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_VARIABLE: {
+            struct retro_variable *var = (struct retro_variable *)data;
+
+            if (!g_vars)
+                return false;
+
+            for (const struct retro_variable *v = g_vars; v->key; ++v) {
+                if (strcmp(var->key, v->key) == 0) {
+                    var->value = v->value;
+                    break;
+                }
+            }
+
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: {
+            bool *bval = (bool*)data;
+            *bval = false;
+            return true;
+        }
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: {
             struct retro_log_callback *cb = (struct retro_log_callback *)data;
             cb->log = retro_core_log;
@@ -242,6 +298,7 @@ int load_game_from_file(const char *filename) {
 
     struct retro_system_av_info av = {0};
     core_handler.retro_get_system_av_info(&av);
+    log_message(LOG_LEVEL_DEBUG, "FPS: %f", av.timing.fps);
     log_message(LOG_LEVEL_DEBUG, "Aspect Ratio: %f", av.geometry.aspect_ratio);
     log_message(LOG_LEVEL_DEBUG, "Height: %d | Width: %d", av.geometry.base_height, av.geometry.base_width);
     log_message(LOG_LEVEL_DEBUG, "Game loaded");
